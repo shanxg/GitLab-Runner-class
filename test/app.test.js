@@ -17,7 +17,7 @@ after(() => new Promise((resolve) => server.close(resolve)));
 
 test('GET /health responde ok com a versão', async () => {
   const res = await fetch(`${baseUrl}/health`);
-  assert.equal(res.status, 201);
+  assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { status: 'ok', version: '1.2.3' });
 });
 

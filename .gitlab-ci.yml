@@ -1,0 +1,80 @@
+# ======================================================================
+#  .gitlab-ci.yml - O ARQUIVO DE ENTRADA DO PIPELINE
+#
+#  O QUE É
+#   - É o mesmo tipo de arquivo que você escreveu no exercício 01: um
+#     pipeline em YAML. Muda só o NOME e o LUGAR.
+#   - Nome exato: .gitlab-ci.yml (começa com ponto, termina em .yml).
+#   - Lugar: na RAIZ do repositório, ao lado do package.json.
+#
+#  COMO O GITLAB USA
+#   - A cada push, o GitLab procura este arquivo no commit enviado.
+#     Achou = cria um pipeline. Não achou = nenhum pipeline, sem erro.
+#   - Ele é o padrão do campo Settings > CI/CD > General pipelines >
+#     CI/CD configuration file. Se o campo apontar para outro arquivo
+#     (ex.: exercicios/01-pipeline-basico.yml), ESTE é ignorado.
+#     Para o GitLab voltar a usá-lo, deixe o campo vazio e salve.
+#   - Só existe UM arquivo de entrada por projeto. Para dividir o
+#     pipeline em vários arquivos, use include: (seção 1).
+#
+#  COMO CRIAR
+#   1. Na raiz do repositório:  New-Item .gitlab-ci.yml
+#      (No Bloco de Notas, salve com "Todos os arquivos (*.*)", senão
+#      ele vira .gitlab-ci.yml.txt.)
+#   2. Escreva as seções na ordem abaixo: stages, default, variables
+#      e, por último, os jobs.
+#   3. Valide antes de enviar:  glab ci lint
+#      (ou no site: Build > Pipeline editor > aba Validate)
+#   4. git add .gitlab-ci.yml, git commit e git push
+#   5. Acompanhe ao vivo:  glab ci view
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# 1. include (opcional): junta outros arquivos de pipeline a este.
+#    Exemplo: rodar o exercício 01 SEM mexer no campo CI/CD
+#    configuration file. Para usar, tire o "#" das duas linhas abaixo e
+#    apague as seções 2 a 5 (senão os jobs dos dois arquivos se somam).
+# ----------------------------------------------------------------------
+# include:
+#   - local: exercicios/01-pipeline-basico.yml
+
+# ----------------------------------------------------------------------
+# 2. stages: as etapas, na ordem em que rodam.
+# ----------------------------------------------------------------------
+stages:
+  - build                # 1ª etapa
+  - test                 # 2ª etapa: só começa se a build passou
+  - deploy               # 3ª etapa: só começa se os testes passaram
+
+# ----------------------------------------------------------------------
+# 3. default: o que todos os jobs herdam.
+# ----------------------------------------------------------------------
+default:
+  tags:                  # escolhe o runner que vai rodar os jobs...
+    - windows-local      # ...o seu runner Windows; sem isto, "pending"
+
+# ----------------------------------------------------------------------
+# 4. variables: valores que os jobs usam.
+#    No YAML a variável é $NOME; dentro do script (PowerShell), $env:NOME.
+# ----------------------------------------------------------------------
+variables:
+  NOME_APP: "estudos-app"   # uma variável qualquer, só para o exemplo
+
+# ----------------------------------------------------------------------
+# 5. jobs: um bloco por tarefa (nome livre + stage + script).
+#    Troque cada Write-Host pelos comandos reais da tarefa.
+# ----------------------------------------------------------------------
+build-modelo:            # nome do job, como aparece no GitLab
+  stage: build           # etapa em que ele roda
+  script:                # comandos PowerShell, em ordem
+    - Write-Host "Etapa build da $env:NOME_APP"
+
+test-modelo:             # job da etapa test
+  stage: test
+  script:
+    - Write-Host "Etapa test da $env:NOME_APP"
+
+deploy-modelo:           # job da etapa deploy
+  stage: deploy
+  script:
+    - Write-Host "Etapa deploy da $env:NOME_APP"
