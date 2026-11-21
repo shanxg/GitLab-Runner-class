@@ -35,8 +35,8 @@
 #    configuration file. Para usar, tire o "#" das duas linhas abaixo e
 #    apague as seções 2 a 5 (senão os jobs dos dois arquivos se somam).
 # ----------------------------------------------------------------------
-# include:
-#   - local: exercicios/01-pipeline-basico.yml
+include:
+  - local: exercicios/01-pipeline-basico.yml
 
 # ----------------------------------------------------------------------
 # 2. stages: as etapas, na ordem em que rodam.
