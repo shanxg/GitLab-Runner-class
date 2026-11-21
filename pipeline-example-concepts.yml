@@ -1,0 +1,400 @@
+# ======================================================================
+#  REFERÊNCIA: o que pode existir num .gitlab-ci.yml
+#  Runner do guia: Windows, executor shell, Windows PowerShell 5.1
+#
+#  É para CONSULTA, não para rodar inteiro. Copie só os trechos úteis.
+#
+#  REGRAS DO YAML
+#   - Indentação só com ESPAÇOS (nunca TAB): ela diz o que é de quem.
+#   - "chave: valor" cria um item; "- valor" cria um item de lista.
+#   - "#" depois de um espaço começa um comentário.
+#   - Chave do nível 0 que NÃO é palavra reservada vira um JOB.
+#   - Chave que começa com "." é job OCULTO: não roda, serve de modelo.
+#
+#  VARIÁVEIS: duas sintaxes
+#   - $NOME      fora dos scripts (variables, rules, environment...):
+#                quem lê é o GitLab.
+#   - $env:NOME  dentro de script, before_script e after_script:
+#                quem lê é o PowerShell. (No Linux/bash seria $NOME.)
+# ======================================================================
+
+
+# ======================================================================
+# PARTE 1 - PALAVRAS-CHAVE GLOBAIS (valem para o pipeline todo)
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# workflow: decide se o PIPELINE inteiro é criado.
+#   rules: lidas de cima para baixo; vale a PRIMEIRA que bater.
+#          Se nenhuma bater, o pipeline não é criado.
+#   name:  nome do pipeline na lista de pipelines.
+# ----------------------------------------------------------------------
+workflow:
+  name: "Pipeline de $CI_COMMIT_REF_NAME"
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^rascunho\//
+      when: never                 # branches rascunho/... não geram pipeline
+    - when: always                # todo o resto gera
+
+# ----------------------------------------------------------------------
+# stages: as etapas, NA ORDEM em que rodam.
+#   - Uma etapa só começa quando os jobs da anterior terminam bem.
+#   - Se um job falha, as etapas seguintes não rodam (veja allow_failure).
+#   - Jobs da mesma etapa podem rodar em paralelo. No seu runner,
+#     concurrent = 1 (config.toml): rodam um de cada vez.
+#   - Sem "stages:", o padrão é build, test, deploy.
+#   - Job sem "stage:" cai em "test".
+#   - .pre e .post existem sempre: rodam antes e depois de tudo.
+# ----------------------------------------------------------------------
+stages:
+  - build
+  - test
+  - deploy
+
+# ----------------------------------------------------------------------
+# variables: variáveis de ambiente para todos os jobs.
+#   - Uma variável pode usar outra: o GitLab monta o valor antes do job.
+#   - Com value/options/description, ela aparece como campo no
+#     formulário Build > Pipelines > Run pipeline.
+#   - Senhas e tokens NUNCA aqui: vão em Settings > CI/CD > Variables
+#     (marcadas como Masked). As de lá têm prioridade sobre as do YAML.
+#   - O GitLab também cria dezenas de variáveis PRONTAS (predefinidas):
+#     CI_PIPELINE_ID, CI_COMMIT_SHORT_SHA, CI_COMMIT_BRANCH,
+#     CI_JOB_NAME, CI_REGISTRY_IMAGE, CI_ENVIRONMENT_NAME...
+# ----------------------------------------------------------------------
+variables:
+  PASTA_SAIDA: "saida"
+  VERSAO: "1.0.$CI_PIPELINE_IID"   # IID = número do pipeline no projeto
+  AMBIENTE_ALVO:
+    value: "qa"
+    options: ["qa", "producao"]
+    description: "Escolha o ambiente ao rodar o pipeline manualmente"
+
+# ----------------------------------------------------------------------
+# default: valores que TODOS os jobs herdam. Um job pode sobrescrever.
+#   Aceita: tags, before_script, after_script, artifacts, cache, retry,
+#   timeout, interruptible, image, services, hooks, id_tokens.
+#   (Variáveis não: as globais ficam no "variables:" acima.)
+# ----------------------------------------------------------------------
+default:
+  tags:                    # qual runner pega o job (veja na parte 2)
+    - windows-local
+  before_script:           # roda antes do script de cada job
+    - Write-Host "Job $env:CI_JOB_NAME na etapa $env:CI_JOB_STAGE"
+  after_script:            # roda depois, mesmo quando o job falha
+    - Write-Host "Terminou com status $env:CI_JOB_STATUS"
+  retry: 1                 # se o job falhar, tenta mais 1 vez
+  timeout: 30 minutes      # tempo máximo de cada job
+  interruptible: true      # um push novo na branch cancela este job
+
+# ----------------------------------------------------------------------
+# include: traz configuração de OUTROS arquivos YAML.
+#   (Comentado porque os arquivos do exemplo não existem.)
+#   local:     arquivo deste repositório
+#   project:   arquivo de outro projeto do GitLab (com file:)
+#   remote:    URL pública
+#   template:  modelos prontos do GitLab
+#   component: componentes do CI/CD Catalog
+# ----------------------------------------------------------------------
+# include:
+#   - local: ci/testes.yml
+#   - project: grupo/modelos-ci
+#     file: /docker.yml
+#   - template: Jobs/SAST.gitlab-ci.yml
+
+
+# ======================================================================
+# PARTE 2 - UM JOB E SEUS ITENS BÁSICOS
+#   O nome do job é livre. A única chave obrigatória é "script"
+#   (ou "trigger", na parte 6).
+# ======================================================================
+compilar:
+  # stage: em qual etapa o job roda. Tem que existir em "stages:".
+  stage: build
+
+  # tags: só um runner que tenha TODAS estas tags aceita o job.
+  #   Sem tag que case, o job fica "pending" para sempre.
+  #   Não confunda com tags do Git (versões): são coisas diferentes.
+  tags: [windows-local]
+
+  # variables: valem só neste job e sobrescrevem as globais.
+  variables:
+    PASTA_SAIDA: "saida-compilar"
+
+  # before_script: no job, SUBSTITUI o do default (não soma).
+  before_script:
+    - Write-Host "Preparando a compilacao"
+
+  # script: os comandos, em ordem, um por item da lista.
+  #   Cada item é um comando PowerShell. Se um der erro, o job para
+  #   e fica vermelho (failed).
+  script:
+    - Write-Host "Versao $env:VERSAO"
+    - New-Item -ItemType Directory -Force $env:PASTA_SAIDA | Out-Null
+    - Set-Content "$env:PASTA_SAIDA/versao.txt" $env:VERSAO
+    # Comando de várias linhas: "- |" e o bloco indentado embaixo.
+    - |
+      if (-not (Test-Path "$env:PASTA_SAIDA/versao.txt")) {
+        throw "O arquivo nao foi criado"
+      }
+    # PEGADINHA: ": " (dois-pontos e espaço) no meio da linha quebra o
+    #   YAML. Envolva a linha INTEIRA em aspas simples.
+    - 'Write-Host "Compilado em: $(Get-Date -Format s)"'
+    # Linha longa: "- >-" junta as linhas de baixo numa linha só.
+    - >-
+      Get-ChildItem $env:PASTA_SAIDA |
+      Select-Object Name, Length
+
+  # after_script: roda num PowerShell NOVO (o que o script criou em
+  #   variáveis já não existe) e roda mesmo se o job falhar.
+  #   Bom para limpeza e para logs.
+  after_script:
+    - Write-Host "Limpeza do job $env:CI_JOB_NAME"
+
+  # artifacts: arquivos que o GitLab GUARDA quando o job termina.
+  #   - Os jobs das etapas seguintes recebem esses arquivos.
+  #   - Dá para baixar o .zip na página do job.
+  #   - Sem isso o arquivo se perde: cada job começa numa pasta limpa.
+  artifacts:
+    name: "saida-$CI_COMMIT_SHORT_SHA"   # nome do .zip
+    paths:                               # o que guardar
+      - saida-compilar/
+    exclude:                             # o que tirar do que foi guardado
+      - saida-compilar/**/*.tmp
+    expire_in: 1 week                    # depois disso o GitLab apaga
+    when: on_success                     # on_success | on_failure | always
+
+
+# ======================================================================
+# PARTE 3 - QUANDO O JOB RODA
+# ======================================================================
+testar:
+  stage: test
+  script:
+    - Write-Host "Testando a versao $env:VERSAO"
+    - Get-Content saida-compilar/versao.txt   # veio do artefato
+
+  # rules: decide se o job ENTRA no pipeline, e como.
+  #   Lidas de cima para baixo; vale a PRIMEIRA que bater.
+  #   Nenhuma bateu = o job não aparece no pipeline.
+  #   Condições de cada regra:
+  #     if:      expressão com variáveis: $A == "x", $A != "x",
+  #              $A =~ /regex/, &&, ||, parênteses.
+  #              $A sozinho = "existe e não está vazia".
+  #     changes: só se algum destes arquivos mudou no push.
+  #     exists:  só se estes arquivos existem no repositório.
+  #   Cada regra também aceita when:, allow_failure: e variables:.
+  #   Com rules, não use "when:" fora delas: ele vai dentro da regra.
+  rules:
+    - if: $CI_COMMIT_MESSAGE =~ /pular-testes/
+      when: never                 # commit com "pular-testes": não roda
+    - changes:
+        - src/**/*
+        - test/**/*
+      when: on_success            # mexeu no código: roda normalmente
+    - when: manual                # senão: fica com botão de play
+      allow_failure: true         # sem isto, o manual BLOQUEIA o pipeline
+
+  # needs: jobs de que este depende. O job começa assim que ELES
+  #   terminam, sem esperar a etapa anterior inteira ("DAG").
+  #   Também baixa os artefatos só deles. needs: [] = começa já.
+  needs: [compilar]
+
+verificar-estilo:
+  stage: test
+  # when: (sem rules) quando o job roda, olhando as etapas anteriores:
+  #   on_success  (padrão) só se tudo antes passou
+  #   on_failure  só se algo antes FALHOU (ex.: avisar o time)
+  #   always      sempre, tendo falhado ou não
+  #   manual      só quando alguém clicar no play
+  #   delayed     espera o tempo de "start_in" (ex.: 10 minutes)
+  #   never       nunca (útil dentro de rules)
+  when: on_success
+
+  # allow_failure: true = se este job falhar, o pipeline segue
+  #   (o job aparece com "!" laranja). Dá para limitar a códigos
+  #   de saída:  allow_failure: { exit_codes: [2, 3] }
+  allow_failure: true
+
+  # dependencies: de quais jobs anteriores baixar artefatos.
+  #   Padrão: de todos os jobs das etapas anteriores. [] = nenhum.
+  #   Não misture com needs no mesmo job.
+  dependencies: []
+
+  # parallel: roda N cópias do job. Com matrix, uma cópia para cada
+  #   combinação de variáveis (aqui: 2 cópias, REGRA=nomes e espacos).
+  parallel:
+    matrix:
+      - REGRA: ["nomes", "espacos"]
+
+  script:
+    - Write-Host "Verificando a regra $env:REGRA"
+
+  # coverage: regex que tira do LOG o percentual de cobertura de
+  #   testes e mostra no pipeline e nos merge requests.
+  coverage: '/Cobertura total: \d+\.\d+%/'
+
+# Só roda em pipeline AGENDADO (criado em Build > Pipeline schedules).
+#   CI_PIPELINE_SOURCE diz o que disparou o pipeline:
+#   push | web (botão Run pipeline) | schedule | merge_request_event |
+#   api | trigger | pipeline | parent_pipeline
+limpeza-agendada:
+  stage: .pre                     # .pre roda antes de todas as etapas
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script:
+    - Write-Host "Limpeza agendada"
+
+aviso-de-falha:
+  stage: .post                    # .post roda depois de todas
+  when: on_failure                # só se algo falhou antes
+  # inherit: escolhe o que o job herda de default: e variables:.
+  inherit:
+    default: [tags]               # do default, herda só as tags
+    variables: false              # não herda as variáveis globais
+  script:
+    - Write-Host "Algo falhou no pipeline $env:CI_PIPELINE_ID"
+
+
+# ======================================================================
+# PARTE 4 - CACHE (reaproveitar arquivos ENTRE PIPELINES)
+#   Artefato: leva arquivos para os PRÓXIMOS JOBS deste pipeline.
+#   Cache:    acelera os PRÓXIMOS PIPELINES (ex.: dependências já
+#             baixadas). No seu runner fica em D:\GitLab\cache.
+#             Pode sumir a qualquer hora: o job precisa funcionar sem.
+#   (A app dos exercícios não tem dependências; isto é só exemplo.)
+# ======================================================================
+instalar-dependencias:
+  stage: build
+  cache:
+    key:
+      files: [package-lock.json]  # o lock mudou = cache novo
+    paths: [node_modules/]
+    policy: pull-push             # pull = só lê | push = só grava
+  script:
+    - npm ci
+
+
+# ======================================================================
+# PARTE 5 - REAPROVEITAR CONFIGURAÇÃO E FAZER DEPLOY
+# ======================================================================
+
+# Job oculto (começa com "."): não roda, serve de modelo para extends.
+.modelo-deploy:
+  stage: deploy
+  # retry detalhado: até 2 novas tentativas (o máximo), só nestas falhas
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  # resource_group: nunca roda 2 jobs deste grupo ao mesmo tempo,
+  #   mesmo vindo de pipelines diferentes (evita 2 deploys juntos).
+  resource_group: maquina-local
+
+# Âncora do YAML: &nome guarda um trecho, *nome cola o trecho.
+#   Só funciona dentro do MESMO arquivo.
+.comandos-comuns: &comandos-comuns
+  - Write-Host "Usuario $env:GITLAB_USER_LOGIN"
+  - Write-Host "Commit $env:CI_COMMIT_SHORT_SHA"
+
+implantar-qa:
+  # extends: herda o modelo e mescla com o que está aqui (o daqui
+  #   ganha). Mapas são mesclados; listas são SUBSTITUÍDAS.
+  #   Funciona entre arquivos (com include), ao contrário da âncora.
+  extends: .modelo-deploy
+
+  # environment: este job faz deploy num ambiente. O GitLab mostra o
+  #   ambiente em Operate > Environments, com o histórico de deploys,
+  #   e a variável CI_ENVIRONMENT_NAME recebe o nome.
+  environment:
+    name: qa
+    url: http://localhost:7800    # botão "Open" na tela de ambientes
+    on_stop: parar-qa             # job que desliga este ambiente
+    auto_stop_in: 1 week          # chama o on_stop depois de 1 semana
+    deployment_tier: testing      # production|staging|testing|development|other
+
+  script:
+    - *comandos-comuns            # cola a lista da âncora
+    - Write-Host "Implantando $env:VERSAO em $env:CI_ENVIRONMENT_NAME"
+    # !reference: reaproveita um trecho de OUTRO job (vale com include)
+    - !reference [compilar, after_script]
+
+parar-qa:
+  extends: .modelo-deploy
+  environment:
+    name: qa
+    action: stop                  # este job DESLIGA o ambiente
+  when: manual
+  # manual_confirmation: pede confirmação antes do job manual rodar
+  manual_confirmation: "Tem certeza que quer desligar o ambiente qa?"
+  script:
+    - Write-Host "Desligando o ambiente qa"
+
+implantar-producao:
+  extends: .modelo-deploy
+  environment:
+    name: producao
+    deployment_tier: production
+  rules:
+    - if: $CI_COMMIT_TAG          # só quando você cria uma tag do Git
+      when: manual                # sem allow_failure: o pipeline fica
+                                  # "blocked" até alguém clicar no play
+  script:
+    - Write-Host "Implantando a tag $env:CI_COMMIT_TAG"
+
+# release: cria uma Release em Deploy > Releases.
+#   O runner precisa ter o release-cli (ou o glab) instalado.
+publicar-release:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - Write-Host "Criando a release $env:CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: "Versao $CI_COMMIT_TAG"
+
+
+# ======================================================================
+# PARTE 6 - COMENTADOS: precisam de algo que não existe no exemplo
+# ======================================================================
+
+# trigger: em vez de script, dispara OUTRO pipeline.
+#   include: arquivo do mesmo repositório = pipeline FILHO
+#   project: outro projeto = pipeline multi-projeto
+#   strategy: depend = este job espera o outro e copia o status dele
+# disparar-filho:
+#   stage: deploy
+#   trigger:
+#     include: ci/filho.yml
+#     strategy: depend
+
+# image / services: NÃO se aplicam ao seu runner (executor shell).
+#   Servem para executor docker/kubernetes (Linux, como no artigo).
+#   image:    imagem Docker em que o job roda
+#   services: containers extras que sobem junto (banco, docker:dind)
+# testar-no-linux:
+#   image: node:lts-alpine
+#   services:
+#     - name: postgres:16
+#       alias: banco
+#   script:
+#     - npm test
+
+
+# ======================================================================
+# OUTRAS PALAVRAS-CHAVE (avançadas, para saber que existem)
+#   artifacts:reports  relatórios (JUnit, cobertura) mostrados no MR
+#   artifacts:expose_as  link do artefato direto no merge request
+#   cache:fallback_keys  caches alternativos se a chave não existir
+#   hooks              comandos antes de o runner baixar o repositório
+#   secrets            busca segredos num cofre (Vault, Azure Key Vault)
+#   id_tokens          tokens OIDC para autenticar em nuvens sem senha
+#   pages              publica um site estático (GitLab Pages)
+#   spec: inputs       parâmetros de arquivos incluídos e componentes
+#                      (cabeçalho do arquivo, separado por ---)
+#   run                CI steps (recurso novo, experimental)
+#   identity, dast_configuration  integrações específicas
+#   only / except      forma ANTIGA de rules: prefira rules
+# ======================================================================
