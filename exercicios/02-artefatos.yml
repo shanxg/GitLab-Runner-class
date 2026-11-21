@@ -14,14 +14,14 @@ compilar:              # nome do job (livre); é o nome que aparece no GitLab
   stage: build         # em qual etapa o job roda
   script:              # comandos do job, executados em ordem
     - npm run build    # roda o script "build" do package.json (gera dist\)
-    - Set-Content -Path dist\build-info.txt -Value "Build $env:CI_PIPELINE_ID com o commit'$env:CI_COMMIT_SHORT_SHA' concluído em $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))"   # cria um arquivo de build info
+    - Set-Content -Path dist\build-info.txt -Value "Build $env:CI_PIPELINE_ID com o commit $env:CI_COMMIT_SHORT_SHA concluido em $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))"   # cria um arquivo de build info
   artifacts:             # declara que o job gera artefatos (arquivos) para os próximos jobs
     paths:
-      - dist\build-info.txt   # o job de teste vai pegar este arquivo
-    expire_in: 1 day         # artefato expira em 1 hora; depois disso, não dá mais para baixar
+      - dist/                 # a pasta inteira (app.js, server.js e build-info.txt) vai para o job de teste
+    expire_in: 1 day         # artefato expira em 1 dia; depois disso, não dá mais para baixar
 
 # ----------------------------------------------------------------------
-# Etapa test: dois jobs na MESMA etapa
+# Etapa test: usa os arquivos que chegaram pelo artefato
 # ----------------------------------------------------------------------
 testar-dist:                          # nome do job (livre)
   stage: test                         # roda depois da etapa build
