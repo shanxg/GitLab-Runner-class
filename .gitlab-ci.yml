@@ -37,6 +37,7 @@
 # ----------------------------------------------------------------------
 include:
   - local: exercicios/01-pipeline-basico.yml
+  - local: exercicios/02-artefatos.yml
 
 # ----------------------------------------------------------------------
 # 2. stages: as etapas, na ordem em que rodam.
