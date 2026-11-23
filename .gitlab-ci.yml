@@ -12,20 +12,22 @@ stages:
  - package
  - deploy
 
-variables:
-  IMAGE_TAG: ${env:CI_REGISTRY_IMAGE}:${env:CI_COMMIT_SHORT_SHA}
+#variables:
+#  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
 
 package:
   stage: package
   script:
+    - $IMAGE = "${env:CI_REGISTRY_IMAGE}:${env:CI_COMMIT_SHORT_SHA}"
     - $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
-    - docker build -t $IMAGE_TAG .
-    - docker push $env:IMAGE_TAG
+    - docker build -t $IMAGE .
+    - docker push $IMAGE
 
 deploy:
   stage: deploy
   script:
+    - $IMAGE = "${env:CI_REGISTRY_IMAGE}:${env:CI_COMMIT_SHORT_SHA}"
     - $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
-    - docker pull $env:IMAGE_TAG
-    - if (docker ps -a -q --filter "name=$env:^estudos-app$") { docker rm -f estudos-app }
-    - docker run -d --name estudos-app -p 7800:81 -e APP_VERSION=$env:CI_COMMIT_SHORT_SHA $env:IMAGE_TAG
+    - docker pull $IMAGE
+    - if (docker ps -a -q --filter "name=estudos-app") { docker rm -f estudos-app }
+    - docker run -d --name estudos-app -p 7800:81 -e APP_VERSION=$env:CI_COMMIT_SHORT_SHA $IMAGE
