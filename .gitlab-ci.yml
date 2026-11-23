@@ -9,12 +9,27 @@ default:
     - scheduler_failure
 
 stages:
+ - test
  - package
  - deploy
 
 #variables:
 #  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
 
+
+# --- Etapa 1: Testes (trazidos do Exercício 01) ---
+test:
+  stage: test
+  script:
+    - npm test
+
+verificar-sintaxe:
+  stage: test
+  script:
+    - node --check src\server.js
+
+
+# --- Etapa 2: Empacotamento Docker ---
 package:
   stage: package
   script:
@@ -23,8 +38,12 @@ package:
     - docker build -t $IMAGE .
     - docker push $IMAGE
 
+
+# --- Etapa 3: Deploy (somente na branch main) ---
 deploy:
   stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
   script:
     - $IMAGE = "${env:CI_REGISTRY_IMAGE}:${env:CI_COMMIT_SHORT_SHA}"
     - $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
