@@ -1,6 +1,7 @@
 # Exercícios — Pipelines CI/CD com GitLab e Docker
-
 Material prático do guia **"Pipelines CI/CD com GitLab e Docker"**, edição Linux + Windows (`CI-CD-Pipelines-GitLab-Docker.docx`, guardado fora deste repositório).
+
+Guia baseado na página : https://medium.com/@ksaquib/ci-cd-pipelines-zero-to-hero-your-guide-from-beginner-to-advanced-mastery-50f2dbe6de16
 
 A aplicação já está pronta. **Os arquivos de pipeline e o Dockerfile são seus**: escrever esses arquivos é o exercício.
 As soluções dos exercícios não estão nesta pasta de propósito. O **Apêndice A** do guia traz a versão Windows dos exemplos do próprio guia: consulte só depois de tentar. Quando terminar um exercício, peça uma revisão.
